@@ -42,7 +42,7 @@ variable "azure_location" {
 variable "tags" {
   description = "Tags aplicadas a los recursos."
   type        = map(string)
-  default     = {
+  default = {
     owner = "lucho"
     env   = "sandbox"
   }

@@ -2,7 +2,7 @@ resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = merge(var.aws_tags, { Name = "${var.name_prefix}-vpc" })
+  tags                 = merge(var.aws_tags, { Name = "${var.name_prefix}-vpc" })
 }
 
 resource "aws_internet_gateway" "igw" {
@@ -12,9 +12,9 @@ resource "aws_internet_gateway" "igw" {
 
 # Subnets públicas
 resource "aws_subnet" "public" {
-  for_each          = toset(var.public_cidrs)
-  vpc_id            = aws_vpc.this.id
-  cidr_block        = each.key
+  for_each                = toset(var.public_cidrs)
+  vpc_id                  = aws_vpc.this.id
+  cidr_block              = each.key
   map_public_ip_on_launch = true
   tags = merge(var.aws_tags, {
     Name = "${var.name_prefix}-public-${replace(each.key, "/.*", "")}"
