@@ -1,5 +1,5 @@
-bucket         = "mi-terraform-states"
+bucket         = "terraform-states-mcs"
 key            = "multicloud/devsecops/terraform.tfstate"
-region         = "us-east-1"
-dynamodb_table = "mi-terraform-locks"
+region         = "us-east-2"
+dynamodb_table = "terraform-locks-mcs"
 encrypt        = true
