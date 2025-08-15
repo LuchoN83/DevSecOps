@@ -1,0 +1,16 @@
+# Copia este archivo a terraform.tfvars y ajusta valores.
+
+name_prefix           = "devsecops"
+aws_region            = "us-east-1"
+vpc_cidr              = "10.0.0.0/16"
+public_subnet_cidrs   = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs  = ["10.0.11.0/24", "10.0.12.0/24"]
+
+# Pon tu Subscription de Azure:
+azure_subscription_id = "00000000-0000-0000-0000-000000000000"
+azure_location        = "eastus"
+
+tags = {
+  owner = "lucho"
+  env   = "sandbox"
+}
