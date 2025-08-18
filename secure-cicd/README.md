@@ -7,17 +7,16 @@ Implementar un pipeline CI/CD seguro para aplicaciones contenedorizadas, utiliza
 
 ## 🏗️ Arquitectura
 flowchart LR
-    DevSecOps((DevSecOps Engineer)) --> |Push Code| GitHub[GitHub Repository] 
-    GitHub --> |CI/CD Pipeline| GitHubActions[GitHub Actions]
-    
-    GitHubActions --> |1. Build App| DockerBuild[Docker Build]
-    GitHubActions --> |2. Trivy FS| TrivyFS[Trivy File System Scan]
-    GitHubActions --> |3. Trivy Image| TrivyImage[Trivy Image Scan]
-    GitHubActions --> |4. Publish| GHCR[GitHub Container Registry]
-    GitHubActions --> |5. Deploy| Helm[Helm Atomic Deployment]
+  Dev[DevSecOps Engineer] -->|Push Code| GitHub[GitHub Repo]
+  GitHub -->|CI/CD| Actions[GitHub Actions]
 
-    Helm --> |Rollout + helm test| K8s[(Kubernetes Cluster)]
+  Actions -->|1.Build| Build[Docker Build]
+  Actions -->|2.Scan FS| TrivyFS[Trivy FS - codigo / IaC]
+  Actions -->|3.Scan Image| TrivyImg[Trivy Image - CVEs]
+  Actions -->|4.Publish| GHCR[(GHCR Registry)]
+  Actions -->|5.Deploy| Helm[Helm Upgrade --install]
 
+  Helm -->|Rollout & Tests| K8s[(Kubernetes Cluster)]
 ## ⚙️ Componentes
 
 GitHub Actions → Orquesta el pipeline CI/CD.
