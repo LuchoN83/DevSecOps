@@ -26,7 +26,7 @@ Soy un **Arquitecto Cloud & DevSecOps Senior** con más de 15 años de experienc
 | Categoría | Proyecto | Descripción | Tecnologías |
 |-----------|----------|-------------|-------------|
 | IaC | [terraform-multicloud-secure](./terraform-multicloud-secure) | Infraestructura segura multi-cloud (AWS + Azure) con módulos y backend remoto seguro. | Terraform, AWS, Azure |
-| CI/CD Seguro | _(Próximamente)_ | Pipeline con análisis, escaneo y despliegue seguro en Kubernetes. | GitHub Actions, Helm, Trivy |
+| CI/CD Seguro | [secure-cicd](./secure-cicd)| Pipeline con análisis, escaneo y despliegue seguro en Kubernetes. | GitHub Actions, Helm, Trivy |
 | Seguridad de Contenedores | _(Próximamente)_ | Imágenes Docker minimalistas, firmadas y validadas. | Docker, Cosign, Kyverno |
 | Observabilidad | _(Próximamente)_ | Stack de métricas, logs y alertas para aplicaciones en producción. | Prometheus, Grafana, Loki |
 | Compliance | _(Próximamente)_ | Auditorías automatizadas para Kubernetes e IaC. | kube-bench, terrascan |
