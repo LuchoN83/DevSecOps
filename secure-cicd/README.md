@@ -6,6 +6,7 @@ Implementar un pipeline CI/CD seguro para aplicaciones contenedorizadas, utiliza
 ---
 
 ## 🏗️ Arquitectura
+```mermaid
 flowchart LR
   Dev[DevSecOps Engineer] -->|Push Code| GitHub[GitHub Repo]
   GitHub -->|CI/CD| Actions[GitHub Actions]
@@ -17,11 +18,3 @@ flowchart LR
   Actions -->|5.Deploy| Helm[Helm Upgrade --install]
 
   Helm -->|Rollout & Tests| K8s[(Kubernetes Cluster)]
-## ⚙️ Componentes
-
-GitHub Actions → Orquesta el pipeline CI/CD.
-Trivy (FS & Image) → Escaneo de seguridad:
-    - trivy fs → detecta vulnerabilidades en código e IaC.
-    - trivy image → analiza la imagen Docker y bloquea el pipeline si encuentra CVEs HIGH/CRITICAL.
-GHCR (GitHub Container Registry) → Almacena la imagen validada y firmada.
-Kubernetes + Helm → Despliega la aplicación de manera atómica, con helm upgrade --install --atomic --wait y valida con helm test.
