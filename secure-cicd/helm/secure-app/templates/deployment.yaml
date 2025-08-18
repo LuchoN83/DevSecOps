@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secure-app
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: { app: secure-app }
+  template:
+    metadata:
+      labels: { app: secure-app }
+    spec:
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 3000
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: {{ .Values.livenessProbe.path }}, port: {{ .Values.livenessProbe.port }} }
+            initialDelaySeconds: 5
+          readinessProbe:
+            httpGet: { path: {{ .Values.readinessProbe.path }}, port: {{ .Values.readinessProbe.port }} }
+            initialDelaySeconds: 3
+          resources: {{- toYaml .Values.resources | nindent 12 }}
