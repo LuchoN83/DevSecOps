@@ -32,7 +32,7 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          scanners: "vuln,secret,config"
+          scanners: "vuln,secret,misconfig"
           ignore-unfixed: true
           severity: "HIGH,CRITICAL"
           exit-code: "1"
