@@ -5,11 +5,14 @@ metadata:
   labels:
     helm.sh/hook: test
 spec:
+  restartPolicy: Never
   containers:
     - name: curl
       image: curlimages/curl
-      command:
-        - sh
-        - -c
-        - "curl -sSf http://secure-app:80/health | grep -q 'ok'"
-  restartPolicy: Never
+      securityContext:            # <-- añadir
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      command: ["sh", "-c", "curl -sSf http://secure-app:80/health | grep -q 'ok'"]
