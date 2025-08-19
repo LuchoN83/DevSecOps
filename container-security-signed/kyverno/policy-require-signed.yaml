@@ -1,0 +1,25 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-signed-images
+spec:
+  validationFailureAction: Enforce
+  background: false
+  webhookTimeoutSeconds: 10
+  rules:
+    - name: verify-cosign
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["apps"]
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/<OWNER>/signed-app:*"   # <--- cambia <OWNER>
+          attestors:
+            - entries:
+                - keys:
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      Pega_aquí_el_contenido_de_tu_cosign.pub
+                      -----END PUBLIC KEY-----
