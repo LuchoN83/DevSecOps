@@ -53,4 +53,39 @@ flowchart LR
 
   class Workload,GHCR good
   class Kyverno warn
-  class Deny stop
+```
+
+🎬 Diagrama de Secuencia
+```mermaid
+sequenceDiagram
+  participant Dev as Developer/DevSecOps
+  participant GH as GitHub Repo
+  participant CI as GitHub Actions (CI/CD)
+  participant REG as GHCR Registry
+  participant CL as Kubernetes Cluster
+  participant KYN as Kyverno Admission
+  participant APP as Deployment/Pod
+
+  Dev->>GH: 0) push code
+  GH->>CI: 1) trigger pipeline
+
+  %% CI/CD - Build & Security Gates
+  CI->>CI: 2) Docker build
+  CI->>CI: 3) Trivy FS (código/IaC)\nFAIL si HIGH/CRITICAL
+  CI->>CI: 4) Trivy Image (CVEs)\nFAIL si HIGH/CRITICAL
+  CI->>REG: 5) Push imagen (sha/latest)
+  CI->>REG: 6) Cosign sign (firma de imagen)
+
+  %% Deploy
+  Dev->>CL: 7) helm upgrade --install (imagen:tag)
+  CL->>KYN: 8) Admission request (verifyImages)
+  KYN->>REG: 9) Verificar firma vs cosign.pub
+  alt Firma válida
+    KYN-->>CL: allow
+    CL->>APP: 10) Crear/actualizar deployment
+    CL-->>Dev: rollout success + helm test ok
+  else Firma inválida / sin firma
+    KYN-->>CL: DENY
+    CL-->>Dev: error: failed image verification
+  end
+```
