@@ -1,0 +1,86 @@
+# Reglas personalizadas de Falco para demo-api
+# Se instalan via Helm values: falco.customRules
+# Complementan las reglas default de Falco (no las reemplazan)
+
+customRules:
+  demo-api-rules.yaml: |-
+
+    # ── 1. Shell en container de producción ──────────────────────────────────
+    - rule: Shell spawned in demo-api container
+      desc: >
+        Un proceso ha ejecutado una shell (sh, bash, dash, zsh) dentro del
+        container demo-api. La imagen distroless no debería tener shell;
+        esto indica compromiso o error de configuración.
+      condition: >
+        spawned_process
+        and container.image.repository contains "demo-api"
+        and proc.name in (shell_binaries)
+      output: >
+        Shell detectada en demo-api
+        (user=%user.name container=%container.id
+         image=%container.image.repository:%container.image.tag
+         proc=%proc.name cmdline=%proc.cmdline)
+      priority: CRITICAL
+      tags: [container, supply-chain, demo-api]
+
+    # ── 2. Escritura en filesystem (debe ser read-only) ───────────────────────
+    - rule: Write in read-only demo-api container
+      desc: >
+        Se ha detectado un intento de escritura fuera de /tmp en el container
+        demo-api, cuyo filesystem raíz está montado read-only.
+      condition: >
+        open_write
+        and container.image.repository contains "demo-api"
+        and not fd.name startswith "/tmp"
+        and not fd.name startswith "/proc"
+      output: >
+        Escritura en FS read-only detectada
+        (user=%user.name file=%fd.name container=%container.id
+         image=%container.image.repository:%container.image.tag)
+      priority: HIGH
+      tags: [container, filesystem, demo-api]
+
+    # ── 3. Conexión de red inesperada (egress no autorizado) ─────────────────
+    - rule: Unexpected outbound connection from demo-api
+      desc: >
+        demo-api solo debe conectarse a kube-dns (UDP/TCP 53).
+        Cualquier otra conexión saliente es sospechosa.
+      condition: >
+        outbound
+        and container.image.repository contains "demo-api"
+        and not (fd.sport in (53))
+        and not fd.sip.name = "kube-dns"
+      output: >
+        Conexión saliente inesperada en demo-api
+        (user=%user.name connection=%fd.name container=%container.id
+         image=%container.image.repository:%container.image.tag)
+      priority: WARNING
+      tags: [network, demo-api]
+
+    # ── 4. Escalada de privilegios ────────────────────────────────────────────
+    - rule: Privilege escalation attempt in demo-api
+      desc: Detección de setuid, setgid o sudo en contenedor demo-api.
+      condition: >
+        (evt.type in (setuid, setgid) or proc.name = sudo)
+        and container.image.repository contains "demo-api"
+      output: >
+        Intento de escalada de privilegios
+        (user=%user.name proc=%proc.name container=%container.id
+         image=%container.image.repository:%container.image.tag)
+      priority: CRITICAL
+      tags: [privilege-escalation, demo-api]
+
+    # ── 5. Acceso a secretos de Kubernetes desde el container ─────────────────
+    - rule: K8s secret access from demo-api
+      desc: >
+        demo-api no tiene SA token montado. Cualquier acceso a
+        /var/run/secrets/kubernetes.io es anómalo.
+      condition: >
+        open_read
+        and container.image.repository contains "demo-api"
+        and fd.name startswith "/var/run/secrets/kubernetes.io"
+      output: >
+        Acceso a secreto K8s desde demo-api
+        (user=%user.name file=%fd.name container=%container.id)
+      priority: CRITICAL
+      tags: [secret, kubernetes, demo-api]

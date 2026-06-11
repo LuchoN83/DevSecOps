@@ -1,0 +1,122 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: demo-api-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack     # selector del Prometheus Operator
+spec:
+  groups:
+
+    # ── SLO: disponibilidad ≥ 99.5% ──────────────────────────────────────────
+    - name: demo-api.slo.availability
+      interval: 30s
+      rules:
+        - record: job:http_requests_total:rate5m
+          expr: |
+            sum(rate(http_requests_total{job="demo-api"}[5m])) by (status_code)
+
+        - alert: DemoApiHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="demo-api", status_code=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job="demo-api"}[5m]))
+            ) > 0.005
+          for: 2m
+          labels:
+            severity: critical
+            team:     platform
+          annotations:
+            summary:     "Error rate > 0.5% en demo-api"
+            description: "La tasa de errores 5xx es {{ $value | humanizePercentage }} (SLO: ≤0.5%)"
+            runbook:     "https://github.com/LuchoN83/DevSecOps/wiki/runbook-high-error-rate"
+
+    # ── SLO: latencia p99 < 500ms ─────────────────────────────────────────────
+    - name: demo-api.slo.latency
+      rules:
+        - alert: DemoApiHighLatency
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(http_request_duration_seconds_bucket{job="demo-api"}[5m])) by (le)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            team:     platform
+          annotations:
+            summary:     "Latencia p99 > 500ms en demo-api"
+            description: "p99 = {{ $value | humanizeDuration }} (SLO: ≤500ms)"
+
+    # ── Disponibilidad del pod ────────────────────────────────────────────────
+    - name: demo-api.availability
+      rules:
+        - alert: DemoApiPodDown
+          expr: |
+            kube_deployment_status_replicas_available{deployment="demo-api"} < 1
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "demo-api sin pods disponibles"
+            description: "No hay réplicas disponibles en el deployment demo-api"
+
+        - alert: DemoApiReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas{deployment="demo-api"}
+            != kube_deployment_status_replicas_available{deployment="demo-api"}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "demo-api: réplicas deseadas ≠ disponibles"
+
+    # ── Alertas de seguridad (Falco → Prometheus via falco-exporter) ──────────
+    - name: demo-api.security
+      rules:
+        - alert: FalcoCriticalEventDetected
+          expr: |
+            increase(falco_events{priority="Critical", container_image=~".*demo-api.*"}[5m]) > 0
+          for: 0m        # alerta inmediata
+          labels:
+            severity: critical
+            team:     security
+          annotations:
+            summary:     "Evento CRITICAL de Falco en demo-api"
+            description: "Falco detectó {{ $value }} evento(s) crítico(s): {{ $labels.rule }}"
+            runbook:     "https://github.com/LuchoN83/DevSecOps/wiki/runbook-falco-critical"
+
+        - alert: FalcoHighEventDetected
+          expr: |
+            increase(falco_events{priority="High", container_image=~".*demo-api.*"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: warning
+            team:     security
+          annotations:
+            summary:     "Evento HIGH de Falco en demo-api"
+            description: "Falco detectó {{ $value }} evento(s) HIGH: {{ $labels.rule }}"
+
+    # ── Recursos ──────────────────────────────────────────────────────────────
+    - name: demo-api.resources
+      rules:
+        - alert: DemoApiHighMemory
+          expr: |
+            container_memory_working_set_bytes{container="demo-api"}
+            / container_spec_memory_limit_bytes{container="demo-api"} > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "demo-api usando >85% del memory limit"
+
+        - alert: DemoApiHighCPU
+          expr: |
+            rate(container_cpu_usage_seconds_total{container="demo-api"}[5m])
+            / container_spec_cpu_quota{container="demo-api"}
+            * container_spec_cpu_period{container="demo-api"} > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "demo-api usando >90% del CPU limit"

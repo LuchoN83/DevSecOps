@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-api
+  labels:
+    app.kubernetes.io/name:       demo-api
+    app.kubernetes.io/component:  backend
+    app.kubernetes.io/part-of:    portfolio-devsecops
+    app.kubernetes.io/managed-by: argocd
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: demo-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name:      demo-api
+        app.kubernetes.io/component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "3000"
+        prometheus.io/path:   "/metrics"
+    spec:
+      # ── Seguridad a nivel Pod ──────────────────────────────────────────────
+      automountServiceAccountToken: false
+      serviceAccountName: demo-api-sa
+
+      securityContext:
+        runAsNonRoot:     true
+        runAsUser:        65532          # nonroot (distroless)
+        runAsGroup:       65532
+        fsGroup:          65532
+        seccompProfile:
+          type: RuntimeDefault           # seccomp profile por defecto del runtime
+
+      # Evitar descarga de imágenes no verificadas
+      imagePullSecrets:
+        - name: acr-pull-secret
+
+      containers:
+        - name: demo-api
+          image: REGISTRY/demo-api:IMAGE_TAG   # kustomize lo reemplaza
+          imagePullPolicy: Always
+
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: APP_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app.kubernetes.io/version']
+
+          # ── Seguridad a nivel Container ──────────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:   true      # filesystem inmutable
+            privileged:               false
+            capabilities:
+              drop: ["ALL"]                     # sin capabilities del kernel
+
+          # ── Recursos (evitar DoS) ─────────────────────────────────────────
+          resources:
+            requests:
+              cpu:    "50m"
+              memory: "64Mi"
+            limits:
+              cpu:    "200m"
+              memory: "256Mi"
+
+          # ── Health checks ──────────────────────────────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds:       15
+            failureThreshold:    3
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds:       10
+            failureThreshold:    2
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 10
+            periodSeconds:     5
+
+          # tmp en memoria para distroless (no shell → no /tmp real)
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Mi
+
+      # Distribución entre nodos
+      topologySpreadConstraints:
+        - maxSkew:           1
+          topologyKey:       kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: demo-api
