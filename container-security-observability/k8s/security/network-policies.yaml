@@ -1,0 +1,90 @@
+# ── Política por defecto: deny-all ────────────────────────────────────────────
+# Bloquea todo el tráfico entrante y saliente por defecto.
+# Solo se permite lo que se declara explícitamente abajo.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: demo-api-dev
+spec:
+  podSelector: {}          # aplica a TODOS los pods del namespace
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# ── Allow: ingress desde ingress-controller → demo-api ────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller
+  namespace: demo-api-dev
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: demo-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port:     3000
+
+---
+# ── Allow: Prometheus scrape → demo-api:3000 ──────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: demo-api-dev
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: demo-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port:     3000
+
+---
+# ── Allow: egress DNS (kube-dns) ──────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: demo-api-dev
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: demo-api
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port:     53
+        - protocol: TCP
+          port:     53

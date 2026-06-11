@@ -1,0 +1,104 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signature
+  annotations:
+    policies.kyverno.io/title:       Verify image signature (Cosign)
+    policies.kyverno.io/category:    Supply Chain Security
+    policies.kyverno.io/severity:    high
+    policies.kyverno.io/description: >-
+      Exige que todas las imágenes desplegadas en los namespaces de la aplicación
+      estén firmadas con Cosign usando OIDC keyless (Sigstore). Bloquea cualquier
+      imagen no firmada o cuya firma no sea verificable.
+spec:
+  validationFailureAction: Enforce
+  background:              false
+  rules:
+    - name: verify-cosign-signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces:
+                - demo-api-dev
+                - demo-api-prd
+      verifyImages:
+        - imageReferences:
+            - "myacr.azurecr.io/demo-api:*"
+          attestors:
+            - entries:
+                - keyless:
+                    subject:    "https://github.com/LuchoN83/DevSecOps/.github/workflows/container-security.yml@refs/heads/main"
+                    issuer:     "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url:      "https://rekor.sigstore.dev"
+          mutateDigest: true          # reemplaza tag por digest SHA inmutable
+          verifyDigest: true
+          required:     true
+
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-privileged-containers
+  annotations:
+    policies.kyverno.io/title:    Restrict privileged containers
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Enforce
+  rules:
+    - name: no-privileged
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Privileged containers están prohibidos."
+        pattern:
+          spec:
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+
+    - name: require-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Los pods deben ejecutarse como non-root (runAsNonRoot: true)."
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+
+    - name: drop-all-capabilities
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Todos los containers deben tener capabilities: drop: [ALL]."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop: ["ALL"]
+
+    - name: readonly-root-filesystem
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces:
+                - demo-api-dev
+                - demo-api-prd
+      validate:
+        message: "readOnlyRootFilesystem debe ser true."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  readOnlyRootFilesystem: true

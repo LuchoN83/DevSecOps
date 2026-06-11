@@ -1,0 +1,151 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# values-stack.yaml
+# Instala el stack completo de observabilidad y seguridad vía Helm
+#
+# Uso:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo add falcosecurity       https://falcosecurity.github.io/charts
+#   helm repo add grafana             https://grafana.github.io/helm-charts
+#   helm repo add kyverno             https://kyverno.github.io/kyverno
+#   helm repo update
+#
+#   helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace -f values-stack.yaml
+#
+#   helm upgrade --install falco falcosecurity/falco \
+#     -n falco --create-namespace -f values-stack.yaml
+#
+#   helm upgrade --install kyverno kyverno/kyverno \
+#     -n kyverno --create-namespace -f values-stack.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── kube-prometheus-stack ─────────────────────────────────────────────────────
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: "10GB"
+    serviceMonitorSelectorNilUsesHelmValues: false   # scrape TODOS los ServiceMonitors
+    podMonitorSelectorNilUsesHelmValues:     false
+    ruleSelectorNilUsesHelmValues:           false
+    additionalScrapeConfigs:
+      - job_name: falco-exporter
+        static_configs:
+          - targets: ['falco-exporter.falco.svc.cluster.local:9376']
+
+alertmanager:
+  alertmanagerSpec:
+    replicas: 1
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: slack-notifications
+      group_by: [alertname, severity]
+      group_wait:      30s
+      group_interval:  5m
+      repeat_interval: 12h
+      routes:
+        - match:
+            severity: critical
+          receiver: slack-critical
+        - match:
+            team: security
+          receiver: slack-security
+    receivers:
+      - name: slack-notifications
+        slack_configs:
+          - api_url: "${SLACK_WEBHOOK_URL}"
+            channel: "#platform-alerts"
+            title:   "{{ .GroupLabels.alertname }}"
+            text:    "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
+      - name: slack-critical
+        slack_configs:
+          - api_url: "${SLACK_WEBHOOK_URL}"
+            channel: "#platform-critical"
+      - name: slack-security
+        slack_configs:
+          - api_url: "${SLACK_WEBHOOK_URL}"
+            channel: "#security-alerts"
+
+grafana:
+  enabled: true
+  adminPassword: "${GRAFANA_ADMIN_PASSWORD}"   # sobreescribir en secreto real
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url:  http://kube-prometheus-stack-prometheus:9090
+          isDefault: true
+        - name: Loki
+          type: loki
+          url:  http://loki.monitoring.svc.cluster.local:3100
+
+# ── Loki (logs) ───────────────────────────────────────────────────────────────
+loki:
+  enabled: true
+  loki:
+    commonConfig:
+      replication_factor: 1
+    storage:
+      type: filesystem
+    limits_config:
+      retention_period: 720h    # 30 días
+
+promtail:
+  enabled: true
+  config:
+    clients:
+      - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        pipeline_stages:
+          - docker: {}
+          - json:
+              expressions:
+                level: level
+                msg:   msg
+          - labels:
+              level:
+              app: __meta_kubernetes_pod_label_app_kubernetes_io_name
+
+# ── Falco (runtime security) ──────────────────────────────────────────────────
+falco:
+  driver:
+    kind: ebpf              # eBPF sin módulo kernel (AKS compatible)
+  falco:
+    grpc:
+      enabled: true
+    grpc_output:
+      enabled: true
+    json_output:    true
+    log_stderr:     true
+    log_level:      info
+    priority:       warning
+  falcoctl:
+    artifact:
+      install:
+        refs: [falco-rules:3]   # reglas oficiales actualizadas
+  customRules: {}               # se aplican desde falco-rules.yaml del repo
+
+falco-exporter:
+  enabled: true    # expone métricas Falco a Prometheus
+
+# ── Kyverno ───────────────────────────────────────────────────────────────────
+kyverno:
+  replicaCount: 1
+  admissionController:
+    replicas: 1
+  backgroundController:
+    enabled: true
+  cleanupController:
+    enabled: true
+  reportsController:
+    enabled: true
