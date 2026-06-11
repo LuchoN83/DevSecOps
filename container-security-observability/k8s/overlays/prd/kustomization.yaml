@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: demo-api-prd
+
+resources:
+  - ../../base
+  - hpa.yaml
+
+commonLabels:
+  environment: prd
+
+images:
+  - name: REGISTRY/demo-api
+    newName: myacr.azurecr.io/demo-api
+    newTag:  sha-latest
+
+---
+# hpa.yaml inline reference — el archivo real está abajo
